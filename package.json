@@ -1,0 +1,12 @@
+{
+  "name": "zerion-exporter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Scan wallets via the Zerion API and export holdings in Range and other formats",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test 'test/*.test.js'"
+  }
+}

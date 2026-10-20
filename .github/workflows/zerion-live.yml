@@ -1,0 +1,31 @@
+name: Zerion live check
+
+# Weekly check that the live Zerion API still returns the fields the app
+# reads. Kept off pull requests so a Zerion outage or rate limit can't block
+# a merge. Needs the ZERION_API_KEY repository secret. Scheduled runs only
+# happen from the default branch; use "Run workflow" to trigger it by hand.
+on:
+  schedule:
+    - cron: '17 14 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check live API
+        env:
+          ZERION_API_KEY: ${{ secrets.ZERION_API_KEY }}
+        run: |
+          if [ -z "$ZERION_API_KEY" ]; then
+            echo "::warning::ZERION_API_KEY secret is not set; skipping the live check."
+            exit 0
+          fi
+          node scripts/live-check.mjs

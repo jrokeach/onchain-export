@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zerion Wallet Exporter</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Zerion Wallet Exporter</h1>
+      <p class="muted">Scan wallets through the Zerion API and export current holdings.</p>
+    </header>
+
+    <section class="card">
+      <h2>Wallets</h2>
+      <p class="muted">One wallet per line. Optional name before or after the address, separated by a comma or tab.
+        Lines starting with <code>#</code> are ignored.</p>
+      <textarea id="input" rows="8" spellcheck="false" placeholder="Ledger Main, 0x7f3a...&#10;0xabc...&#10;Hot Wallet	7xKX...solana"></textarea>
+      <div class="row">
+        <label class="file">
+          <input type="file" id="file" accept=".txt,.csv,.tsv,text/plain,text/csv">
+          <span>Load from file…</span>
+        </label>
+        <span id="parse-status" class="muted"></span>
+      </div>
+      <div id="preview" class="preview"></div>
+    </section>
+
+    <section class="card">
+      <h2>Options</h2>
+      <div class="grid">
+        <label>Output format
+          <select id="format"></select>
+        </label>
+        <label title="How a token held on several chains at the same address is reported. Changing this re-renders the results without rescanning.">Same token on several chains
+          <select id="chain-mode"></select>
+        </label>
+        <label>Min. holding value (USD)
+          <input type="number" id="min-value" min="0" step="any" value="1">
+        </label>
+        <label class="check" title="Fetched during the scan (extra Zerion requests that count toward the advanced-request limit). The other options apply to existing results without rescanning."><input type="checkbox" id="cost-basis"> Include cost basis (from Zerion PnL; needs a scan)</label>
+        <label class="check"><input type="checkbox" id="include-unpriced"> Include unpriced tokens</label>
+        <label class="check" title="Tokens Zerion flags as spam. Scanning with this unticked fetches them too (more requests on spam-heavy wallets); after that it can be toggled without rescanning."><input type="checkbox" id="drop-spam" checked> Drop spam tokens</label>
+        <label class="check"><input type="checkbox" id="show-price" checked> Include price (price_usd)</label>
+        <label class="check"><input type="checkbox" id="show-value" checked> Include value (value_usd)</label>
+        <label class="check" title="When a token in the wallet (an aToken, vault share or liquid staking token like mETH) and a protocol position Zerion decodes from it look like the same funds (same chain, within 2% in value, related symbol or name), keep the token and leave out the protocol position."><input type="checkbox" id="exclude-duplicates" checked> Skip protocol positions that duplicate a held token</label>
+        <label id="api-key-row">Zerion API key
+          <input type="password" id="api-key" autocomplete="off" placeholder="zk_...">
+          <small id="api-key-hint" class="muted"></small>
+        </label>
+      </div>
+      <div id="cost-basis-warning" class="issue warn" hidden>
+        <strong>Cost basis will likely be wrong.</strong> Zerion only sees each wallet's on-chain history and
+        prices every token at the market rate on the day it arrived in that wallet. The figure is only correct
+        if you landed funds on-chain in USD terms (e.g. as USDC) and swapped into each token from there, inside
+        the scanned wallet. Tokens transferred in from your other wallets or an exchange, bridged, wrapped, or
+        moved in and out of DeFi protocols get a new basis at the arrival price, and borrowed tokens have none.
+      </div>
+      <div class="row">
+        <button id="scan" class="primary">Scan wallets</button>
+        <button id="cancel" hidden>Cancel</button>
+        <progress id="progress" hidden></progress>
+        <span id="scan-status" class="muted"></span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Post-scan adjustments</h2>
+      <p class="muted">Applied to the last scan instantly, without new Zerion requests. Saved in this browser.</p>
+      <h3>Miscellaneous Tokens</h3>
+      <div class="grid">
+        <label class="check" title="One row per account, ticker &quot;Miscellaneous Tokens&quot;, whose quantity is the total USD value of the grouped tokens (price 1). Grouped tokens are not reported anywhere else. For tokens Zerion can price but Range can't."><input type="checkbox" id="misc-on"> Group tokens into a &quot;Miscellaneous Tokens&quot; line</label>
+        <label>Tokens worth less than (USD)
+          <input type="number" id="misc-below" min="0" step="any" value="50">
+        </label>
+        <label>Also group these tickers
+          <input type="text" id="misc-tickers" placeholder="DOG, BENTO, toby" spellcheck="false">
+        </label>
+      </div>
+      <h3>Report as individual wallet</h3>
+      <p class="muted">Tokens Range can't handle in a normal account. Each is reported as its own account named
+        <code>&lt;account&gt;:&lt;ticker&gt;</code>, always with price and value (those columns stay in the output, filled for
+        these rows, even if hidden above). Never folded into Miscellaneous Tokens.</p>
+      <div class="row">
+        <input type="text" id="individual" spellcheck="false" placeholder="TOBY, FTM, weETH">
+        <button id="individual-reset" type="button">Reset to defaults</button>
+      </div>
+      <h3>Remap tickers</h3>
+      <p class="muted">Report a token under another ticker (e.g. ASV-USD as USDC). Rows with the same new ticker are merged; a token
+        Zerion has no price for takes the new ticker's price from this scan.</p>
+      <table class="remap"><thead><tr><th>Ticker</th><th></th><th>Report as</th><th></th></tr></thead><tbody id="remap-rows"></tbody></table>
+      <div class="row">
+        <button id="remap-add" type="button">Add mapping</button>
+        <button id="remap-reset" type="button">Reset to defaults</button>
+      </div>
+    </section>
+
+    <section class="card" id="results" hidden>
+      <div class="row spread">
+        <h2>Results</h2>
+        <div class="row">
+          <label class="check"><input type="radio" name="view" value="table" checked> Table</label>
+          <label class="check"><input type="radio" name="view" value="raw"> Raw</label>
+          <button id="copy">Copy</button>
+          <button id="download" class="primary">Download</button>
+        </div>
+      </div>
+      <div id="issues"></div>
+      <div id="table-view" class="table-wrap"></div>
+      <pre id="raw-view" hidden></pre>
+    </section>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

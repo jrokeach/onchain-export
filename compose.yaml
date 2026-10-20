@@ -1,0 +1,24 @@
+# docker compose up -d           → http://127.0.0.1:3000 (published image)
+# docker compose up -d --build   → build from this checkout instead
+#
+# Pin a version by changing :latest to a release tag, e.g. :1.2.3.
+#
+# ZERION_API_KEY is read from your shell or from a .env file next to this
+# file (ZERION_API_KEY=zk_...). Leave it unset to enter a key in the UI.
+services:
+  zerion-exporter:
+    image: ghcr.io/jrokeach/onchain-export:latest
+    build: .
+    init: true                    # forward Ctrl-C / docker stop to Node
+    restart: unless-stopped
+    ports:
+      # Host side bound to localhost only: anyone who can reach the port can
+      # run scans with the server's API key. Drop "127.0.0.1:" to expose it.
+      - "127.0.0.1:${PORT:-3000}:3000"
+    environment:
+      ZERION_API_KEY: ${ZERION_API_KEY:-}
+      ZERION_RATE_LIMIT: ${ZERION_RATE_LIMIT:-1}
+      SCAN_CONCURRENCY: ${SCAN_CONCURRENCY:-2}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
